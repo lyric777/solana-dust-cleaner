@@ -1,98 +1,128 @@
-use solana_client::rpc_client::RpcClient;
+use solana_client::{
+    rpc_client::RpcClient,
+    rpc_request::TokenAccountsFilter,
+};
 use solana_sdk::{
     commitment_config::CommitmentConfig,
-    signature::{Keypair, Signer, read_keypair_file, write_keypair_file},
+    signature::{read_keypair_file, Signer},
     native_token::LAMPORTS_PER_SOL,
-    system_instruction,
     transaction::Transaction,
     pubkey::Pubkey,
     program_pack::Pack,
 };
 use spl_token::state::Account as TokenAccount;
+use solana_account_decoder::UiAccountData; // 用于识别数据格式
 use anyhow::Result;
-use std::path::Path;
-use std::str::FromStr; // <--- 新增：用于解析字符串地址
+use std::str::FromStr;
 
 const RPC_URL: &str = "https://api.devnet.solana.com";
 const KEYPAIR_PATH: &str = "id.json";
 
 fn main() -> Result<()> {
+    // 1. 初始化
     let client = RpcClient::new_with_commitment(RPC_URL, CommitmentConfig::confirmed());
     println!("📡 连接 Devnet 成功");
 
-    // 读取钱包
-    let my_keypair = if Path::new(KEYPAIR_PATH).exists() {
-        read_keypair_file(KEYPAIR_PATH).map_err(|_| anyhow::anyhow!("无法读取 id.json"))?
-    } else {
-        let kp = Keypair::new();
-        write_keypair_file(&kp, KEYPAIR_PATH).map_err(|_| anyhow::anyhow!("无法写入"))?;
-        kp
-    };
+    let my_keypair = read_keypair_file(KEYPAIR_PATH)
+        .map_err(|_| anyhow::anyhow!("找不到 id.json"))?;
     let my_pubkey = my_keypair.pubkey();
 
-    // 检查余额
     let start_balance = client.get_balance(&my_pubkey)?;
-    println!("💰 当前余额: {:.4} SOL", start_balance as f64 / LAMPORTS_PER_SOL as f64);
-
-    if start_balance < LAMPORTS_PER_SOL / 10 {
-        println!("❌ 余额不足，请去领水！");
-        return Ok(());
-    }
-
-    // --- 核心逻辑：制造垃圾 ---
+    println!("💰 当前余额: {:.5} SOL", start_balance as f64 / LAMPORTS_PER_SOL as f64);
     println!("---------------------------------------------------");
-    println!("🗑️  准备制造 3 个闲置空账户...");
-    
-    let token_program_id = spl_token::id();
-    
-    // 🔥 [修正点]：使用真实的 Wrapped SOL Mint 地址
-    // 这个地址在 Devnet 和 Mainnet 都是一样的，永远有效
-    let valid_mint = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
+    println!("🔍 正在全网扫描你的 Token 账户...");
 
-    let space = TokenAccount::LEN;
-    let rent_lamports = client.get_minimum_balance_for_rent_exemption(space)?;
-    println!("ℹ️  单账户租金成本: {:.5} SOL", rent_lamports as f64 / LAMPORTS_PER_SOL as f64);
+    // 2. 获取所有 Token 账户 (使用标准方法)
+    let all_accounts = client.get_token_accounts_by_owner(
+        &my_pubkey,
+        TokenAccountsFilter::ProgramId(spl_token::id()),
+    )?;
 
-    for i in 1..=3 {
-        let new_token_account = Keypair::new();
+    println!("📊 扫描完毕，发现一共有 {} 个账户", all_accounts.len());
+
+    // 3. 筛选出可以回收的账户
+    let mut accounts_to_close = vec![];
+
+    for keyed_account in all_accounts {
+        let account_pubkey = Pubkey::from_str(&keyed_account.pubkey)?;
         
-        let create_ix = system_instruction::create_account(
-            &my_pubkey,
-            &new_token_account.pubkey(),
-            rent_lamports,
-            space as u64,
-            &token_program_id,
-        );
+        // --- 核心修复：智能判断数据格式 ---
+        // Solana 有时候返回二进制，有时候返回 JSON，我们两个都处理
+        let is_empty_account = match keyed_account.account.data {
+            // 情况 A: 返回的是 JSON 格式 (Parsed)
+            UiAccountData::Json(parsed_account) => {
+                // 我们深入 JSON 结构去找 "amount" 字段
+                // 结构通常是: parsed_account.parsed["info"]["tokenAmount"]["amount"]
+                let amount_str = parsed_account.parsed
+                    .get("info")
+                    .and_then(|info| info.get("tokenAmount"))
+                    .and_then(|amt| amt.get("amount"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("1"); // 如果找不到，就默认当成 1 (不处理)，防止误删
+                
+                amount_str == "0"
+            },
+            // 情况 B: 返回的是二进制格式 (LegacyBinary / Binary)
+            UiAccountData::Binary(ref data, _) | UiAccountData::LegacyBinary(ref data) => {
+                 // 解码 Base64/Base58 字符串为字节数组
+                 if let Some(bytes) = keyed_account.account.data.decode() {
+                     if let Ok(token_account) = TokenAccount::unpack(&bytes) {
+                         token_account.amount == 0
+                     } else { false }
+                 } else { false }
+            },
+        };
 
-        let init_ix = spl_token::instruction::initialize_account(
-            &token_program_id,
-            &new_token_account.pubkey(),
-            &valid_mint, // <--- 这里换成了真实的 Mint
-            &my_pubkey,
-        )?;
-
-        let mut tx = Transaction::new_with_payer(
-            &[create_ix, init_ix],
-            Some(&my_pubkey),
-        );
-        
-        let recent_blockhash = client.get_latest_blockhash()?;
-        tx.sign(&[&my_keypair, &new_token_account], recent_blockhash);
-
-        print!("   [#{}] 创建中... ", i);
-        match client.send_and_confirm_transaction(&tx) {
-            Ok(_) => println!("✅ 成功! 地址: {:?}", new_token_account.pubkey()),
-            Err(e) => println!("❌ 失败: {}", e),
+        if is_empty_account {
+            accounts_to_close.push(account_pubkey);
+            println!("   [✅ 发现猎物] 地址: {}... | 余额: 0 (待回收)", &account_pubkey.to_string()[0..8]);
         }
     }
 
-    let end_balance = client.get_balance(&my_pubkey)?;
-    let lost = start_balance - end_balance;
+    if accounts_to_close.is_empty() {
+        println!("✅ 没有发现闲置账户。");
+        return Ok(());
+    }
 
     println!("---------------------------------------------------");
-    println!("📉 制造垃圾完毕！");
-    println!("💰 最新余额: {:.4} SOL", end_balance as f64 / LAMPORTS_PER_SOL as f64);
-    println!("💸 为了这 3 个垃圾账号，你一共被锁定了: {:.5} SOL", lost as f64 / LAMPORTS_PER_SOL as f64);
+    println!("🔥 准备回收 {} 个账户的租金...", accounts_to_close.len());
+
+    // 4. 构建批量回收指令
+    let mut instructions = vec![];
+    
+    for account_pubkey in &accounts_to_close {
+        let close_ix = spl_token::instruction::close_account(
+            &spl_token::id(),
+            account_pubkey,
+            &my_pubkey, // 钱退给你
+            &my_pubkey, // 你签名
+            &[],
+        )?;
+        instructions.push(close_ix);
+    }
+
+    // 5. 发送交易
+    let mut tx = Transaction::new_with_payer(
+        &instructions,
+        Some(&my_pubkey),
+    );
+    
+    let recent_blockhash = client.get_latest_blockhash()?;
+    tx.sign(&[&my_keypair], recent_blockhash);
+
+    println!("🚀 发送交易中...");
+    match client.send_and_confirm_transaction(&tx) {
+        Ok(sig) => println!("✅ 回收成功! 交易哈希: {}", sig),
+        Err(e) => println!("❌ 交易失败: {}", e),
+    }
+
+    // 6. 最终算账
+    let final_balance = client.get_balance(&my_pubkey)?;
+    let profit = final_balance - start_balance;
+
+    println!("---------------------------------------------------");
+    println!("💰 回收后余额: {:.5} SOL", final_balance as f64 / LAMPORTS_PER_SOL as f64);
+    println!("🎉 恭喜！你刚刚赚回了: {:.5} SOL", profit as f64 / LAMPORTS_PER_SOL as f64);
     println!("---------------------------------------------------");
 
     Ok(())

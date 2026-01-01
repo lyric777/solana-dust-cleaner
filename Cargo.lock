@@ -3740,6 +3740,8 @@ dependencies = [
  "anyhow",
  "clap 4.5.53",
  "dotenv",
+ "serde_json",
+ "solana-account-decoder",
  "solana-client",
  "solana-sdk",
  "spl-token",
