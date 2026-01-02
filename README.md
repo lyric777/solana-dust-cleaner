@@ -31,6 +31,53 @@ Go to the [Releases](https://github.com/lyric777/solana-dust-cleaner/releases) p
 Ensure you have Rust installed.
 
 ```bash
-git clone [https://github.com/lyric777/solana-dust-cleaner.git](https://github.com/lyric777/solana-dust-cleaner.git)
+git clone https://github.com/lyric777/solana-dust-cleaner.git
 cd solana-dust-cleaner
 cargo build --release
+```
+The binary will be in target/release/solana-dust-cleaner.
+
+## 🛠 Usage
+By default, the tool connects to Solana Mainnet and looks for id.json in the current directory.
+
+### 1. Dry Run (Scan Only)
+Check how much SOL you can reclaim without executing any transactions.
+```bash
+./solana-dust-cleaner
+```
+### 2. Execute Cleanup
+Actually burn tokens and close accounts. Requires confirmation.
+```bash
+./solana-dust-cleaner --clean
+```
+### 3. Custom RPC & Keypair
+If you are using a custom RPC (recommended for speed) or a different keyfile:
+```bash
+./solana-dust-cleaner --keypair /path/to/mainnet.json --rpc [https://your-helius-rpc.com] --clean
+```
+### 4. Skip Confirmation (For Scripts)
+⚠️ Dangerous! Use only if you know what you are doing.
+```bash
+./solana-dust-cleaner --clean --yes
+```
+## 🧪 Testing on Devnet
+Want to try it safely first?
+Generate Test Data: We provide a script to create a fresh wallet, airdrop SOL, and create spam tokens on Devnet.
+```bash
+cargo run --bin create-spam
+```
+Clean it up:
+```bash
+cargo run --bin solana-dust-cleaner -- --rpc https://api.devnet.solana.com --clean
+```
+## ⚠️ Disclaimer
+This software is provided "as is", without warranty of any kind.
+
+This tool BURNS tokens. Once burnt, they are gone forever.
+
+Always run a Dry Run (without --clean) first to see what will be removed.
+
+Use at your own risk.
+
+## ☕ Support
+If this tool helped you, star this repo on GitHub! ⭐
