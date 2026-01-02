@@ -3446,6 +3446,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-dust-cleaner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.5.53",
+ "dotenv",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-sdk",
+ "spl-token",
+]
+
+[[package]]
 name = "solana-frozen-abi"
 version = "1.18.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3731,20 +3745,6 @@ dependencies = [
  "solana-sdk",
  "thiserror",
  "uriparse",
-]
-
-[[package]]
-name = "solana-rent-reclaimer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 4.5.53",
- "dotenv",
- "serde_json",
- "solana-account-decoder",
- "solana-client",
- "solana-sdk",
- "spl-token",
 ]
 
 [[package]]

@@ -1,20 +1,22 @@
 [package]
-name = "solana-rent-reclaimer"
+name = "solana-dust-cleaner"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "solana-dust-cleaner"  
+path = "src/main.rs"
+
+[[bin]]
+name = "create-spam"       
+path = "src/bin/create_test_env.rs"
+
 [dependencies]
-# 核心 SDK，包含账户、交易、签名等基础结构
 solana-sdk = "1.18"
-# 客户端库，用于发送 RPC 请求（查余额、发交易）
 solana-client = "1.18"
-# SPL Token 库，用于操作 Token 账户（我们的核心目标）
 spl-token = "4.0"
-# 错误处理库，Rust 里的 try/catch 神器
 anyhow = "1.0"
-# 环境变量读取，用于加载你的私钥
 dotenv = "0.15"
-# 命令行参数解析（后续做 CLI 用，先加上）
 clap = { version = "4.4", features = ["derive"] }
 solana-account-decoder = "1.18"
 serde_json = "1.0"
