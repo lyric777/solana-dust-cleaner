@@ -15,41 +15,39 @@ use spl_token::{
 use anyhow::Result;
 use std::path::Path;
 
-// 强制使用 Devnet 进行测试
+// use Devnet 
 const RPC_URL: &str = "https://api.devnet.solana.com";
 const KEYPAIR_PATH: &str = "id.json";
 
 fn main() -> Result<()> {
     let client = RpcClient::new_with_commitment(RPC_URL, CommitmentConfig::confirmed());
-    println!("🧪 正在初始化测试环境 (Devnet)...");
+    println!("🧪 init env (Devnet)...");
 
-    // 1. 获取或创建钱包
+    // 1. create or get wallet
     let my_keypair = if Path::new(KEYPAIR_PATH).exists() {
         read_keypair_file(KEYPAIR_PATH).unwrap()
     } else {
         let kp = Keypair::new();
         write_keypair_file(&kp, KEYPAIR_PATH).unwrap();
-        println!("🆕 创建了新钱包 id.json");
+        println!("🆕 create new wallet id.json");
         kp
     };
     let my_pubkey = my_keypair.pubkey();
-    println!("📍 测试钱包: {}", my_pubkey);
+    println!("📍 test wallet: {}", my_pubkey);
 
-    // 2. 检查余额 & 领水
     let balance = client.get_balance(&my_pubkey)?;
     if balance < LAMPORTS_PER_SOL / 2 {
-        println!("💧 余额不足，正在申请空投...");
+        println!("💧 Balance insufficient, applying for airdrop...");
         match client.request_airdrop(&my_pubkey, LAMPORTS_PER_SOL) {
             Ok(sig) => {
                 client.confirm_transaction(&sig)?;
-                println!("✅ 空投成功！");
+                println!("✅ Airdrop succeed！");
             },
-            Err(_) => println!("⚠️ 空投失败 (可能是由于限流)，如果后续失败请手动领水。"),
+            Err(_) => println!("⚠️ Airdrop failed (possible rate limiting), if subsequent attempts fail, please manually claim airdrop"),
         }
     }
 
-    // 3. 制造一个“诈骗代币” (Scam Token)
-    println!("😈 正在制造 'SCAM' 代币...");
+    println!("😈 making SCAM token...");
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let mint_rent = client.get_minimum_balance_for_rent_exemption(Mint::LEN)?;
@@ -61,7 +59,7 @@ fn main() -> Result<()> {
         &spl_token::id(), &mint_pubkey, &my_pubkey, None, 2,
     )?;
 
-    // 创建接收账户
+    // create account
     let token_account_keypair = Keypair::new();
     let token_account_pubkey = token_account_keypair.pubkey();
     let acc_rent = client.get_minimum_balance_for_rent_exemption(spl_token::state::Account::LEN)?;
@@ -72,13 +70,12 @@ fn main() -> Result<()> {
     let init_acc_ix = token_instruction::initialize_account(
         &spl_token::id(), &token_account_pubkey, &mint_pubkey, &my_pubkey,
     )?;
-    // 发 666 个币
+    //  666 
     let mint_to_ix = token_instruction::mint_to(
         &spl_token::id(), &mint_pubkey, &token_account_pubkey, &my_pubkey, &[], 66600,
     )?;
 
-    // 4. 再制造一个纯空账户 (Empty Account)
-    println!("🗑️  正在制造纯空账户...");
+    println!("🗑️  create Empty Account...");
     let empty_acc_kp = Keypair::new();
     let create_empty_ix = system_instruction::create_account(
         &my_pubkey, &empty_acc_kp.pubkey(), acc_rent, spl_token::state::Account::LEN as u64, &spl_token::id(),
@@ -87,7 +84,7 @@ fn main() -> Result<()> {
         &spl_token::id(), &empty_acc_kp.pubkey(), &mint_pubkey, &my_pubkey,
     )?;
 
-    // 发送所有交易
+    // send all trans
     let tx = Transaction::new_signed_with_payer(
         &[create_mint_ix, init_mint_ix, create_acc_ix, init_acc_ix, mint_to_ix, create_empty_ix, init_empty_ix],
         Some(&my_pubkey),
@@ -96,10 +93,10 @@ fn main() -> Result<()> {
     );
 
     client.send_and_confirm_transaction(&tx)?;
-    println!("✅ 测试环境构建完成！");
-    println!("   - 1个诈骗账户 (余额 666 SCAM)");
-    println!("   - 1个空账户 (余额 0)");
-    println!("   现在运行主程序来清理它们吧！");
+    println!("✅ test env created!");
+    println!("   - one spam (balance 666 SCAM)");
+    println!("   - 1 empty account (balance 0)");
+    println!("   now lets run main script to burn them！");
 
     Ok(())
 }
