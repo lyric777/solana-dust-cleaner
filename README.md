@@ -81,3 +81,5 @@ Use at your own risk.
 
 ## ☕ Support
 If this tool helped you, star this repo on GitHub! ⭐
+
+(or feel free to buy me a coffee! SOL Address: 7yc6YrCWR7p5sTUZiiwmkE9RVuhACdSgr9GqNqZCk6pY)
