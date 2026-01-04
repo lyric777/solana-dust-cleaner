@@ -43,7 +43,7 @@ fn main() -> Result<()> {
                 client.confirm_transaction(&sig)?;
                 println!("✅ Airdrop succeed！");
             },
-            Err(_) => println!("⚠️ Airdrop failed (possible rate limiting), if subsequent attempts fail, please manually claim airdrop"),
+            Err(_) => println!("⚠️ Airdrop failed (possible rate limiting), if subsequent attempts fail, please manually faucet"),
         }
     }
 
